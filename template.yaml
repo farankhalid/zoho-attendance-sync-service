@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  sync-service
+
+  SAM Template for Attendance Device Integration with Zoho People
+
+Globals:
+  Function:
+    Timeout: 3
+
+    LoggingConfig:
+      LogFormat: JSON
+Resources:
+  SyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: sync_function
+      Handler: sync/app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+      - x86_64
+      Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: cron(*/10 * * * ? *)
+    Environment:
+        Variables:
+          DB_HOST: "202.163.76.227"
+          DB_USER: "root"
+          DB_PASSWORD: "JvVGXn4@j7"
+          DB_NAME: "zkbiotime"
+          ZOHO_TOKEN: "1000.xxxx"
+
+Outputs:
+  SyncFunction:
+    Description: Sync Lambda Function ARN
+    Value: !GetAtt SyncFunction.Arn
+  SyncFunctionIamRole:
+    Description: Implicit IAM Role created for Sync function
+    Value: !GetAtt SyncFunctionRole.Arn

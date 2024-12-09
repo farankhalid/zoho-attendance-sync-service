@@ -1,0 +1,17 @@
+{
+  "id": "abc12345-6789-def0-1234-56789abcdef0",
+  "detail-type": "Scheduled Event Trigger",
+  "source": "custom.scheduled",
+  "account": "123456789012",
+  "time": "2024-12-09T12:00:00Z",
+  "region": "us-east-1",
+  "version": "1",
+  "resources": [
+    "arn:aws:events:us-east-1:123456789012:rule/ScheduledRule"
+  ],
+  "detail": {
+    "task": "sync-data",
+    "target-system": "Zoho",
+    "triggered-at": "2024-12-09T12:00:00Z"
+  }
+}
