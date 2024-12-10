@@ -1,37 +1,92 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  sync-service
-
-  SAM Template for Attendance Device Integration with Zoho People
+Description: AWS Serverless Application Model template for Attendance Device Integration with Zoho People.
 
 Globals:
   Function:
     Timeout: 3
-
     LoggingConfig:
       LogFormat: JSON
+
+Parameters:
+  DBHost:
+    Type: String
+  DBUser:
+    Type: String
+  DBPassword:
+    Type: String
+  DBName:
+    Type: String
+  ZohoClientID:
+    Type: String
+  ZohoClientSecret:
+    Type: String
+  ZohoRefreshToken:
+    Type: String
+
 Resources:
+  SyncFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SyncFunctionSSMAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                Resource:
+                  - arn:aws:ssm:ap-south-1:191313281483:parameter/ZOHO_ACCESS_TOKEN
+                  - arn:aws:ssm:ap-south-1:191313281483:parameter/ZOHO_ACCESS_TOKEN_EXPIRY
+
   SyncFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: sync_function
       Handler: sync/app.lambda_handler
+      MemorySize: 128
       Runtime: python3.12
       Architectures:
-      - x86_64
+        - x86_64
+      Layers:
+        - arn:aws:lambda:ap-south-1:191313281483:layer:sync-service-layer:1
+      Role: !GetAtt SyncFunctionRole.Arn
+      Environment:
+        Variables:
+          DB_HOST: !Ref DBHost
+          DB_USER: !Ref DBUser
+          DB_PASSWORD: !Ref DBPassword
+          DB_NAME: !Ref DBName
+          ZOHO_CLIENT_ID: !Ref ZohoClientID
+          ZOHO_CLIENT_SECRET: !Ref ZohoClientSecret
+          ZOHO_REFRESH_TOKEN: !Ref ZohoRefreshToken
+      EventInvokeConfig:
+        MaximumEventAgeInSeconds: 21600
+        MaximumRetryAttempts: 2
+      EphemeralStorage:
+        Size: 512
+      RecursiveLoop: Terminate
+      SnapStart:
+        ApplyOn: None
       Events:
         ScheduledEvent:
           Type: Schedule
           Properties:
-            Schedule: cron(*/10 * * * ? *)
-    Environment:
-        Variables:
-          DB_HOST: "202.163.76.227"
-          DB_USER: "root"
-          DB_PASSWORD: "JvVGXn4@j7"
-          DB_NAME: "zkbiotime"
-          ZOHO_TOKEN: "1000.xxxx"
+            Schedule: cron(*/30 * * * ? *)
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: Auto
 
 Outputs:
   SyncFunction:

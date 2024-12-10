@@ -1,17 +1,14 @@
 {
-  "id": "abc12345-6789-def0-1234-56789abcdef0",
-  "detail-type": "Scheduled Event Trigger",
-  "source": "custom.scheduled",
-  "account": "123456789012",
-  "time": "2024-12-09T12:00:00Z",
-  "region": "us-east-1",
-  "version": "1",
-  "resources": [
-    "arn:aws:events:us-east-1:123456789012:rule/ScheduledRule"
-  ],
-  "detail": {
-    "task": "sync-data",
-    "target-system": "Zoho",
-    "triggered-at": "2024-12-09T12:00:00Z"
+  "time": "2024-12-10T08:50:16.527Z",
+  "type": "platform.initStart",
+  "record": {
+      "initializationType": "on-demand",
+      "phase": "init",
+      "runtimeVersion": "python:3.12.v38",
+      "runtimeVersionArn": "arn:aws:lambda:ap-south-1::runtime:7515e00d6763496e7a147ffa395ef5b0f0c1ffd6064130abb5ecde5a6d630e86",
+      "functionName": "SyncServiceStack-SyncFunction-XhCER7umzjVc",
+      "functionVersion": "$LATEST",
+      "instanceId": "2024/12/10/[$LATEST]e3bc373c4a02409f9c9f5e9e9bf41287",
+      "instanceMaxMemory": 134217728
   }
 }
