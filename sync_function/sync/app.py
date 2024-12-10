@@ -1,179 +1,219 @@
-import pymysql
 import json
-import requests
-from datetime import datetime, timedelta
+import logging
 import os
+from datetime import datetime, timedelta, timezone
+
+import pymysql
+import requests
 import boto3
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Environment Variables
+DB_HOST = os.environ.get("DB_HOST")
+DB_USER = os.environ.get("DB_USER")
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
+DB_NAME = os.environ.get("DB_NAME")
+ZOHO_REFRESH_TOKEN = os.environ.get("ZOHO_REFRESH_TOKEN")
+ZOHO_CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID")
+ZOHO_CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET")
+
+# SSM Parameter Names
+ZOHO_TOKEN_SSM_KEY = "ZOHO_ACCESS_TOKEN"
+ZOHO_TOKEN_EXPIRY_SSM_KEY = "ZOHO_ACCESS_TOKEN_EXPIRY"
+
+# Zoho Endpoints and Config
+ZOHO_TOKEN_ENDPOINT = "https://accounts.zoho.eu/oauth/v2/token"
+ZOHO_BULK_IMPORT_ENDPOINT = "https://people.zoho.com/people/api/attendance/bulkImport"
+ACCESS_TOKEN_GRACE_PERIOD = 300  # 5 minutes before expiry
+
+# Time window for fetching attendance records (e.g., past 15 minutes)
+TIME_DELTA_MINUTES = 15
 
 ssm = boto3.client("ssm")
 
-
 def lambda_handler(event, context):
-    print("Event JSON:", event)
-    # Environment Variables
-    db_host = os.environ["DB_HOST"]
-    db_user = os.environ["DB_USER"]
-    db_password = os.environ["DB_PASSWORD"]
-    db_name = os.environ["DB_NAME"]
-    refresh_token = os.environ["ZOHO_REFRESH_TOKEN"]
-    client_id = os.environ["ZOHO_CLIENT_ID"]
-    client_secret = os.environ["ZOHO_CLIENT_SECRET"]
+    logger.info("Received event: %s", json.dumps(event))
 
-    # Get a valid access token
-    access_token = get_cached_access_token(refresh_token, client_id, client_secret)
+    try:
+        # Fetch attendance records from DB
+        records = fetch_attendance_records(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, TIME_DELTA_MINUTES)
+        logger.info("Fetched %d records from database.", len(records))
 
-    # Calculate time range for the query (last 15 minutes)
-    end_time = datetime.utcnow()
-    start_time = end_time - timedelta(minutes=15)
+        if not records:
+            return success_response("No data to send.")
+
+        # Transform data to Zoho format
+        zoho_data = transform_records_for_zoho(records)
+
+        # Retrieve or refresh Zoho access token using the refresh token
+        access_token = get_or_refresh_zoho_access_token(ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET)
+
+        # Send data to Zoho
+        response = send_to_zoho(zoho_data, access_token)
+        logger.info("Zoho API response: %s", response)
+
+        return success_response("Data sent to Zoho successfully", response)
+
+    except Exception as e:
+        logger.exception("An error occurred.")
+        return error_response(str(e))
+
+
+def fetch_attendance_records(db_host, db_user, db_password, db_name, delta_minutes):
+    """
+    Fetch attendance records from the database within the last `delta_minutes`.
+    """
+    end_time = datetime.now(timezone.utc)
+    start_time = end_time - timedelta(minutes=delta_minutes)
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # MySQL Query
     query = f"""
     SELECT *
     FROM (
-        -- Check-in Records
         SELECT 
-            personnel_employee.emp_code AS employeeId,
-            DATE_FORMAT(att_payloadtimecard.clock_in, '%Y-%m-%d %H:%i:%s') AS eventTime,
+            pe.emp_code AS employeeId,
+            DATE_FORMAT(apt.clock_in, '%Y-%m-%d %H:%i:%s') AS eventTime,
             '1' AS isCheckin
-        FROM 
-            zkbiotime.att_payloadtimecard
-        JOIN 
-            zkbiotime.personnel_employee 
-        ON 
-            personnel_employee.id = att_payloadtimecard.emp_id
-        WHERE 
-            att_payloadtimecard.clock_in >= STR_TO_DATE('{start_time_str}', '%Y-%m-%d %H:%i:%s')
-            AND att_payloadtimecard.clock_in < STR_TO_DATE('{end_time_str}', '%Y-%m-%d %H:%i:%s')
-            AND att_payloadtimecard.clock_in IS NOT NULL
+        FROM zkbiotime.att_payloadtimecard apt
+        JOIN zkbiotime.personnel_employee pe ON pe.id = apt.emp_id
+        WHERE apt.clock_in >= STR_TO_DATE('{start_time_str}', '%Y-%m-%d %H:%i:%s')
+          AND apt.clock_in < STR_TO_DATE('{end_time_str}', '%Y-%m-%d %H:%i:%s')
+          AND apt.clock_in IS NOT NULL
 
         UNION
 
-        -- Check-out Records
         SELECT 
-            personnel_employee.emp_code AS employeeId,
-            DATE_FORMAT(att_payloadtimecard.clock_out, '%Y-%m-%d %H:%i:%s') AS eventTime,
+            pe.emp_code AS employeeId,
+            DATE_FORMAT(apt.clock_out, '%Y-%m-%d %H:%i:%s') AS eventTime,
             '0' AS isCheckin
-        FROM 
-            zkbiotime.att_payloadtimecard
-        JOIN 
-            zkbiotime.personnel_employee 
-        ON 
-            personnel_employee.id = att_payloadtimecard.emp_id
-        WHERE 
-            att_payloadtimecard.clock_out >= STR_TO_DATE('{start_time_str}', '%Y-%m-%d %H:%i:%s')
-            AND att_payloadtimecard.clock_out < STR_TO_DATE('{end_time_str}', '%Y-%m-%d %H:%i:%s')
-            AND att_payloadtimecard.clock_out IS NOT NULL
+        FROM zkbiotime.att_payloadtimecard apt
+        JOIN zkbiotime.personnel_employee pe ON pe.id = apt.emp_id
+        WHERE apt.clock_out >= STR_TO_DATE('{start_time_str}', '%Y-%m-%d %H:%i:%s')
+          AND apt.clock_out < STR_TO_DATE('{end_time_str}', '%Y-%m-%d %H:%i:%s')
+          AND apt.clock_out IS NOT NULL
     ) AS attendance;
     """
 
+    connection = pymysql.connect(
+        host=db_host, user=db_user, password=db_password, database=db_name
+    )
     try:
-        # Connect to the database
-        connection = pymysql.connect(
-            host=db_host, user=db_user, password=db_password, database=db_name
-        )
         with connection.cursor(pymysql.cursors.DictCursor) as cursor:
             cursor.execute(query)
-            records = cursor.fetchall()
-
-        # Transform data into Zoho's required format
-        zoho_data = []
-        for record in records:
-            if record["isCheckin"] == "1":
-                zoho_data.append(
-                    {
-                        "empId": record["employeeId"],
-                        "checkIn": record["eventTime"]
-                    }
-                )
-            elif record["isCheckin"] == "0":
-                zoho_data.append(
-                    {
-                        "empId": record["employeeId"],
-                        "checkOut": record["eventTime"]
-                    }
-                )
-
-        # Send data to Zoho API
-        if zoho_data:
-            response = send_to_zoho(zoho_data, access_token)
-            return {
-                "statusCode": 200,
-                "body": json.dumps(
-                    {"message": "Data sent to Zoho successfully", "response": response}
-                ),
-            }
-        else:
-            return {
-                "statusCode": 200,
-                "body": json.dumps({"message": "No data to send"}),
-            }
-
-    except Exception as e:
-        return {"statusCode": 500, "body": json.dumps({"message": str(e)})}
+            return cursor.fetchall()
     finally:
-        if "connection" in locals():
-            connection.close()
+        connection.close()
 
 
-def get_cached_access_token(refresh_token, client_id, client_secret):
-    """Retrieve a cached access token or generate a new one if expired."""
+def transform_records_for_zoho(records):
+    """
+    Transform database records into the format required by Zoho.
+    """
+    zoho_data = []
+    for record in records:
+        if record["isCheckin"] == "1":
+            zoho_data.append({"empId": record["employeeId"], "checkIn": record["eventTime"]})
+        else:
+            zoho_data.append({"empId": record["employeeId"], "checkOut": record["eventTime"]})
+    return zoho_data
+
+
+def get_or_refresh_zoho_access_token(refresh_token, client_id, client_secret):
+    """
+    Retrieve a cached access token if it's still valid. Otherwise, refresh it.
+    """
     try:
-        # Retrieve cached token and expiry time from SSM
-        access_token = ssm.get_parameter(Name="ZOHO_ACCESS_TOKEN", WithDecryption=True)["Parameter"]["Value"]
-        expiry_time = ssm.get_parameter(Name="ZOHO_ACCESS_TOKEN_EXPIRY", WithDecryption=True)["Parameter"]["Value"]
+        access_token = get_ssm_parameter(ZOHO_TOKEN_SSM_KEY)
+        expiry_str = get_ssm_parameter(ZOHO_TOKEN_EXPIRY_SSM_KEY)
+        expiry_time = datetime.fromisoformat(expiry_str)
 
-        # Check if the token is still valid
-        if datetime.utcnow() < datetime.fromisoformat(expiry_time):
-            print("Using cached access token.")
+        # Check if token is still valid with a grace period
+        if datetime.now(timezone.utc) < (expiry_time - timedelta(seconds=ACCESS_TOKEN_GRACE_PERIOD)):
+            logger.info("Using cached Zoho access token. Valid until %s", expiry_time.isoformat())
             return access_token
+        else:
+            logger.info("Cached token near expiry, refreshing now.")
+            return refresh_zoho_access_token(refresh_token, client_id, client_secret)
     except ssm.exceptions.ParameterNotFound:
-        print("No cached token found. Generating a new one.")
+        logger.info("No cached Zoho token found. Generating a new one.")
+        return refresh_zoho_access_token(refresh_token, client_id, client_secret)
+    except Exception as e:
+        logger.error("Error retrieving cached token: %s", e)
+        return refresh_zoho_access_token(refresh_token, client_id, client_secret)
 
-    # Generate a new access token
-    return refresh_access_token(refresh_token, client_id, client_secret)
 
-
-def refresh_access_token(refresh_token, client_id, client_secret):
-    """Refresh the access token using the refresh token."""
-    url = "https://accounts.zoho.com/oauth/v2/token"
+def refresh_zoho_access_token(refresh_token, client_id, client_secret):
+    """
+    Refresh the Zoho access token using the refresh token.
+    """
     payload = {
         "grant_type": "refresh_token",
         "client_id": client_id,
         "client_secret": client_secret,
-        "refresh_token": refresh_token,
+        "refresh_token": refresh_token
     }
-    response = requests.post(url, data=payload)
-    if response.status_code == 200:
-        tokens = response.json()
-        access_token = tokens["access_token"]
-        expiry_time = datetime.utcnow() + timedelta(seconds=tokens["expires_in"])
 
-        # Save new token and expiry time to SSM
-        ssm.put_parameter(
-            Name="ZOHO_ACCESS_TOKEN", Value=access_token, Type="String", Overwrite=True
-        )
-        ssm.put_parameter(
-            Name="ZOHO_ACCESS_TOKEN_EXPIRY",
-            Value=expiry_time.isoformat(),
-            Type="String",
-            Overwrite=True,
-        )
+    response = requests.post(ZOHO_TOKEN_ENDPOINT, data=payload)
+    if response.status_code != 200:
+        raise Exception(f"Failed to refresh Zoho access token: {response.text}")
 
-        print("Access token refreshed and cached.")
-        return access_token
-    else:
-        raise Exception(f"Failed to refresh access token: {response.text}")
+    tokens = response.json()
+    access_token = tokens["access_token"]
+    expiry_time = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
+
+    # Store new token and expiry in SSM
+    put_ssm_parameter(ZOHO_TOKEN_SSM_KEY, access_token, param_type="SecureString")
+    put_ssm_parameter(ZOHO_TOKEN_EXPIRY_SSM_KEY, expiry_time.isoformat(), param_type="String")
+
+    logger.info("Access token refreshed and cached until %s", expiry_time.isoformat())
+    return access_token
 
 
 def send_to_zoho(data, access_token):
-    """Send data to Zoho Bulk Import API."""
-    url = "https://people.zoho.com/people/api/attendance/bulkImport"
+    """
+    Send the transformed data to Zoho's Bulk Import API.
+    """
     headers = {
         "Authorization": f"Zoho-oauthtoken {access_token}",
         "Content-Type": "application/json",
     }
     payload = {"data": data, "dateFormat": "yyyy-MM-dd HH:mm:ss"}
-    response = requests.post(url, headers=headers, json=payload)
-    return {"status_code": response.status_code, "response_body": response.text}
+    response = requests.post(ZOHO_BULK_IMPORT_ENDPOINT, headers=headers, json=payload)
+    return {
+        "status_code": response.status_code,
+        "response_body": response.text
+    }
+
+
+def get_ssm_parameter(name):
+    """
+    Retrieve a parameter from SSM Parameter Store (with decryption).
+    """
+    return ssm.get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"]
+
+
+def put_ssm_parameter(name, value, param_type="String"):
+    """
+    Put a parameter into SSM Parameter Store.
+    """
+    ssm.put_parameter(Name=name, Value=value, Type=param_type, Overwrite=True)
+
+
+def success_response(message, data=None):
+    body = {"message": message}
+    if data is not None:
+        body["data"] = data
+    return {
+        "statusCode": 200,
+        "body": json.dumps(body)
+    }
+
+
+def error_response(message):
+    return {
+        "statusCode": 500,
+        "body": json.dumps({"error": message})
+    }
