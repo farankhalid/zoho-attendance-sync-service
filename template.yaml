@@ -4,7 +4,7 @@ Description: AWS Serverless Application Model template for Attendance Device Int
 
 Globals:
   Function:
-    Timeout: 3
+    Timeout: 15
     LoggingConfig:
       LogFormat: JSON
 
@@ -84,7 +84,7 @@ Resources:
         ScheduledEvent:
           Type: Schedule
           Properties:
-            Schedule: cron(*/30 * * * ? *)
+            Schedule: cron(*/10 * * * ? *)
       RuntimeManagementConfig:
         UpdateRuntimeOn: Auto
 
