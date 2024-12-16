@@ -1,1 +1,0 @@
-curl -X POST https://accounts.zoho.eu/oauth/v2/token -d "grant_type=authorization_code" -d "client_id=1000.UAT8XOMIQG0XZD328AABT3P6AVWBHM" -d "client_secret=b50d249b002ce817d9b9a01061195827798afcd850" -d "code=1000.4e7217705f540074046d6b7fe5a21702.dd961b59b851f182d69dd57ad0d3f96b" -o response.json

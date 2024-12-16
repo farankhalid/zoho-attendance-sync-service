@@ -37,7 +37,7 @@ ZOHO_TOKEN_ENDPOINT = "https://accounts.zoho.eu/oauth/v2/token"
 ZOHO_BULK_IMPORT_ENDPOINT = "https://people.zoho.eu/people/api/attendance/bulkImport"
 ACCESS_TOKEN_GRACE_PERIOD = 300  # 5 minutes before expiry
 
-# Time window for fetching attendance records (e.g., past 15 minutes)
+# Time window for fetching attendance records (past 15 minutes)
 TIME_DELTA_MINUTES = 5760
 
 ssm = boto3.client("ssm")
@@ -47,10 +47,17 @@ def lambda_handler(event, context):
     logger.info("Received event: %s", json.dumps(event))
 
     try:
-        logger.debug("Starting fetch_attendance_records...")
+        logger.debug("Calling fetch_attendance_records...")
         records = fetch_attendance_records(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, TIME_DELTA_MINUTES)
         logger.info("Fetched %d records from database.", len(records))
-        logger.debug("Records: %s", json.dumps(records, default=str))
+        
+        # Print first few records for debugging
+        if records:
+            logger.debug("First few records: %s", json.dumps(records[:5], default=str))
+        else:
+            logger.debug("No records retrieved from the database.")
+
+        logger.debug("Completed fetch_attendance_records successfully.")
 
         if not records:
             logger.debug("No records found to send to Zoho.")
@@ -58,15 +65,18 @@ def lambda_handler(event, context):
 
         logger.debug("Transforming records for Zoho...")
         zoho_data = transform_records_for_zoho(records)
-        logger.debug("Transformed Zoho data: %s", json.dumps(zoho_data))
+        logger.debug("Transformed Zoho data. Number of records: %d", len(zoho_data))
+        if zoho_data:
+            logger.debug("First few transformed records: %s", json.dumps(zoho_data[:5]))
 
         logger.debug("Retrieving or refreshing Zoho access token...")
         access_token = get_or_refresh_zoho_access_token(ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET)
-        logger.debug("Using access token: %s", access_token[:10] + "...")  # Partial token for security
+        logger.debug("Using access token: %s...", access_token[:10])  # Partial token for security
 
         logger.debug("Sending data to Zoho...")
         response = send_to_zoho(zoho_data, access_token)
         logger.info("Zoho API response: %s", response)
+        logger.debug("Data sent to Zoho successfully.")
 
         return success_response("Data sent to Zoho successfully", response)
 
@@ -76,13 +86,13 @@ def lambda_handler(event, context):
 
 
 def fetch_attendance_records(db_host, db_user, db_password, db_name, delta_minutes):
+    logger.debug("Calculating time range for attendance records...")
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(minutes=delta_minutes)
-    # start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+    # For debugging purposes, hard-coded times are being used.
     start_time_str = '2024-11-25 00:00:00'
-    logger.info("Start time is: %s", start_time_str)
-    # end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
     end_time_str = '2024-11-30 23:59:59'
+    logger.info("Start time is: %s", start_time_str)
     logger.info("End time is: %s", end_time_str)
 
     query = f"""
@@ -129,34 +139,38 @@ def fetch_attendance_records(db_host, db_user, db_password, db_name, delta_minut
 
 
 def transform_records_for_zoho(records):
+    logger.debug("Starting transformation of records for Zoho...")
     zoho_data = []
     for record in records:
         if record["isCheckin"] == "1":
             zoho_data.append({"empId": record["employeeId"], "checkIn": record["eventTime"]})
         else:
             zoho_data.append({"empId": record["employeeId"], "checkOut": record["eventTime"]})
+    logger.debug("Finished transforming records for Zoho. Total: %d", len(zoho_data))
     return zoho_data
 
 
 def get_or_refresh_zoho_access_token(refresh_token, client_id, client_secret):
+    logger.debug("Attempting to retrieve cached access token and expiry from SSM.")
     try:
-        logger.debug("Attempting to retrieve cached access token from SSM...")
         access_token = get_ssm_parameter(ZOHO_TOKEN_SSM_KEY)
         expiry_str = get_ssm_parameter(ZOHO_TOKEN_EXPIRY_SSM_KEY)
         expiry_time = datetime.fromisoformat(expiry_str)
         logger.debug("Cached access token expires at: %s", expiry_time.isoformat())
 
-        if datetime.now(timezone.utc) < (expiry_time - timedelta(seconds=ACCESS_TOKEN_GRACE_PERIOD)):
+        current_time = datetime.now(timezone.utc)
+        if current_time < (expiry_time - timedelta(seconds=ACCESS_TOKEN_GRACE_PERIOD)):
             logger.info("Using cached Zoho access token. Valid until %s", expiry_time.isoformat())
             return access_token
         else:
             logger.info("Cached token near expiry, refreshing now.")
             return refresh_zoho_access_token(refresh_token, client_id, client_secret)
     except ssm.exceptions.ParameterNotFound:
-        logger.info("No cached Zoho token found. Generating a new one.")
+        logger.info("No cached Zoho token found. Generating a new one via refresh.")
         return refresh_zoho_access_token(refresh_token, client_id, client_secret)
     except Exception as e:
         logger.error("Error retrieving cached token: %s", e)
+        logger.info("Refreshing token due to error.")
         return refresh_zoho_access_token(refresh_token, client_id, client_secret)
 
 
@@ -168,7 +182,10 @@ def refresh_zoho_access_token(refresh_token, client_id, client_secret):
         "refresh_token": refresh_token
     }
 
-    logger.debug("Refreshing Zoho access token with payload: %s", payload)
+    logger.debug("Refreshing Zoho access token with payload (masking secrets): {"
+                 f"'grant_type': 'refresh_token', 'client_id': '{client_id[:5]}...', "
+                 f"'client_secret': '***', 'refresh_token': '{refresh_token[:5]}...'}}")
+
     response = requests.post(ZOHO_TOKEN_ENDPOINT, data=payload)
     logger.debug("Zoho token refresh response status: %d", response.status_code)
     logger.debug("Zoho token refresh response body: %s", response.text)
@@ -208,12 +225,12 @@ def send_to_zoho(data, access_token):
 def get_ssm_parameter(name):
     logger.debug("Retrieving SSM parameter: %s", name)
     value = ssm.get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"]
-    logger.debug("Retrieved SSM parameter: %s = %s", name, value)
+    logger.debug("Retrieved SSM parameter: %s = %s", name, value[:10] + "..." if len(value) > 10 else value)
     return value
 
 
 def put_ssm_parameter(name, value, param_type="String"):
-    logger.debug("Putting SSM parameter: %s = %s", name, value)
+    logger.debug("Putting SSM parameter: %s = %s...", name, value[:10] + "..." if len(value) > 10 else value)
     ssm.put_parameter(Name=name, Value=value, Type=param_type, Overwrite=True)
     logger.debug("Successfully updated SSM parameter: %s", name)
 

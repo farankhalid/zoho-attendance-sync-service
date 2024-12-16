@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AWS Serverless Application Model template for Attendance Device Integration with Zoho People.
+Description: AWS Serverless Application Model template for Attendance Device
+  Integration with Zoho People.
 
 Globals:
   Function:
