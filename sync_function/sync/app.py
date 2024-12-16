@@ -44,45 +44,45 @@ ssm = boto3.client("ssm")
 
 
 def lambda_handler(event, context):
-    logger.info("Received event: %s", json.dumps(event))
+    # logger.info("Received event: %s", json.dumps(event))
 
-    try:
-        logger.debug("Calling fetch_attendance_records...")
-        records = fetch_attendance_records(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, TIME_DELTA_MINUTES)
-        logger.info("Fetched %d records from database.", len(records))
-        
-        # Print first few records for debugging
-        if records:
-            logger.debug("First few records: %s", json.dumps(records[:5], default=str))
-        else:
-            logger.debug("No records retrieved from the database.")
+    # try:
+    logger.debug("Calling fetch_attendance_records...")
+    records = fetch_attendance_records(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, TIME_DELTA_MINUTES)
+    logger.info("Fetched %d records from database.", len(records))
+    
+    # Print first few records for debugging
+    if records:
+        logger.debug("First few records: %s", json.dumps(records[:5], default=str))
+    else:
+        logger.debug("No records retrieved from the database.")
 
-        logger.debug("Completed fetch_attendance_records successfully.")
+    logger.debug("Completed fetch_attendance_records successfully.")
 
-        if not records:
-            logger.debug("No records found to send to Zoho.")
-            return success_response("No data to send.")
+    if not records:
+        logger.debug("No records found to send to Zoho.")
+        return success_response("No data to send.")
 
-        logger.debug("Transforming records for Zoho...")
-        zoho_data = transform_records_for_zoho(records)
-        logger.debug("Transformed Zoho data. Number of records: %d", len(zoho_data))
-        if zoho_data:
-            logger.debug("First few transformed records: %s", json.dumps(zoho_data[:5]))
+    logger.debug("Transforming records for Zoho...")
+    zoho_data = transform_records_for_zoho(records)
+    logger.debug("Transformed Zoho data. Number of records: %d", len(zoho_data))
+    if zoho_data:
+        logger.debug("First few transformed records: %s", json.dumps(zoho_data[:5]))
 
-        logger.debug("Retrieving or refreshing Zoho access token...")
-        access_token = get_or_refresh_zoho_access_token(ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET)
-        logger.debug("Using access token: %s...", access_token[:10])  # Partial token for security
+#     logger.debug("Retrieving or refreshing Zoho access token...")
+#     access_token = get_or_refresh_zoho_access_token(ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET)
+#     logger.debug("Using access token: %s...", access_token[:10])  # Partial token for security
+# 
+#     logger.debug("Sending data to Zoho...")
+#     response = send_to_zoho(zoho_data, access_token)
+#     logger.info("Zoho API response: %s", response)
+#     logger.debug("Data sent to Zoho successfully.")
+# 
+#     return success_response("Data sent to Zoho successfully", response)
 
-        logger.debug("Sending data to Zoho...")
-        response = send_to_zoho(zoho_data, access_token)
-        logger.info("Zoho API response: %s", response)
-        logger.debug("Data sent to Zoho successfully.")
-
-        return success_response("Data sent to Zoho successfully", response)
-
-    except Exception as e:
-        logger.exception("An error occurred while processing.")
-        return error_response(str(e))
+    # except Exception as e:
+    #     logger.exception("An error occurred while processing.")
+    #     return error_response(str(e))
 
 
 def fetch_attendance_records(db_host, db_user, db_password, db_name, delta_minutes):
