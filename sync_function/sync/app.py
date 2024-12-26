@@ -2,7 +2,6 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-import urllib.parse
 
 import pymysql
 import requests

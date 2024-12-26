@@ -24,8 +24,19 @@ Parameters:
     Type: String
   ZohoRefreshToken:
     Type: String
+  ZohoAccessTokenPSARN:
+    Type: String
+  ZohoAccessTokenExpiryPSARN:
+    Type: String
 
 Resources:
+  DependencyLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+        LayerName: dependencies
+        CompatibleRuntimes:
+        - python3.12
+        ContentUri: layers/dependencies
   SyncFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -49,8 +60,8 @@ Resources:
                   - ssm:GetParameter
                   - ssm:PutParameter
                 Resource:
-                  - arn:aws:ssm:ap-south-1:191313281483:parameter/ZOHO_ACCESS_TOKEN
-                  - arn:aws:ssm:ap-south-1:191313281483:parameter/ZOHO_ACCESS_TOKEN_EXPIRY
+                  - !Ref ZohoAccessTokenPSARN
+                  - !Ref ZohoAccessTokenExpiryPSARN
 
   SyncFunction:
     Type: AWS::Serverless::Function
@@ -62,7 +73,7 @@ Resources:
       Architectures:
         - x86_64
       Layers:
-        - arn:aws:lambda:ap-south-1:191313281483:layer:sync-service-layer:1
+        - !Ref DependencyLayer
       Role: !GetAtt SyncFunctionRole.Arn
       Environment:
         Variables:
