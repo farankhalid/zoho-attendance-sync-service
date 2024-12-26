@@ -26,48 +26,46 @@ Before deploying, ensure you have the following tools installed and configured:
 
 - **.env** - Copy `.env.example` to `.env` and add your actual parameters (DB_HOST, DB_USER, DB_PASSWORD, etc.).
 
-- **Lambda Layer (Optional)** - If your function depends on external libraries (e.g., database drivers, or shared utility code), you can package them into a Lambda layer. To create and include a Python-based Lambda layer:
-   
-- **Step 1**: - Create a folder structure to hold your dependencies, for example:
-    ```bash
-    layers/
-    my_python_layer/
-        python/
-        # place your requirements.txt or Python files here
-    ```
+- **Lambda Layer** - If your function depends on external libraries (e.g., database drivers, or shared utility code), you can package them into a Lambda layer. To create and include a Python-based Lambda layer:
 
-- **Step 2**: Install dependencies (if any) into the `python` folder:
-    ```bash
-    cd layers/my_python_layer
-    pip install -r requirements.txt -t python/
-    ```
+    - Create a folder structure to hold your dependencies, for example:
+    
+        ```bash
+        layers/
+        my_python_layer/
+            python/
+            # place your requirements.txt or Python files here
+        ```
 
-- **Step 3**: In your `template.yaml`, define the layer resource:
-    ```yaml
-    MyPythonLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-        LayerName: my-python-layer
-        CompatibleRuntimes:
-        - python3.12
-        ContentUri: layers/my_python_layer
-    ```
+    - Install dependencies (if any) into the `python` folder:
+        ```bash
+        cd layers/my_python_layer
+        pip install -r ../../sync_function/requirements.txt -t python/
+        ```
 
-- **Step 4**: Reference this layer in your Lambda function:
-    ```yaml
-    SyncFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-        # ...
-        Layers:
-        - !Ref MyPythonLayer
-        # ...
-    ```
+    - In your `template.yaml`, define the layer resource:
+        ```yaml
+        MyPythonLayer:
+        Type: AWS::Serverless::LayerVersion
+        Properties:
+            LayerName: my-python-layer
+            CompatibleRuntimes:
+            - python3.12
+            ContentUri: layers/my_python_layer
+        ```
 
-When you deploy, SAM will package the layer and attach it to your function automatically.
+    - Reference this layer in your Lambda function:
+        ```yaml
+        SyncFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            # ...
+            Layers:
+            - !Ref MyPythonLayer
+            # ...
+        ```
 
-- **.env** - Copy `.env.example` to `.env` and add your actual parameters (DB_HOST, DB_USER, DB_PASSWORD, etc.).
-
+    When you deploy, SAM will package the layer and attach it to your function automatically.
 
 ## Environment Variables
 
@@ -83,7 +81,6 @@ ZOHO_CLIENT_SECRET="<your-zoho-client-secret>"
 ZOHO_REFRESH_TOKEN="<your-zoho-refresh-token>"
 ZOHO_ACCESS_TOKEN_PS_ARN="your-zoho-access-token-parameter-store-arn"
 ZOHO_ACCESS_TOKEN_EXPIRY_PS_ARN="your-zoho-access-token-expiry-parameter-store-arn"
-LAMBDA_LAYER_ARN="your-lambda-layer-arn"
 ```
 
 These values are passed to the Lambda at deploy time, as shown in the **Makefile**.

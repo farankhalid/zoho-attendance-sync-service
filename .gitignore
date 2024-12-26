@@ -18,7 +18,9 @@ __pycache__/
 *$py.class
 
 # Lambda Layer
-layers/dependencies/python/*
+!layers/dependencies/python/.gitignore
+layers/dependencies/python/*/
+layers/dependencies/python/*.py
 
 # C extensions
 *.so
