@@ -1,4 +1,4 @@
-# AWS Lambda with Scheduled (Cron) Event Using AWS SAM
+# AWS Lambda Cron-based Attendance Sync to Zoho People
 
 This project contains source code and supporting files for a **serverless application** that periodically syncs attendance records from an on-premises (or external) device to **Zoho People**. The application is written in **Python 3.12** and is deployed using the AWS Serverless Application Model (SAM). The key AWS resources in this stack include a **Lambda function** (scheduled every 5 minutes) and an **IAM role** with permissions to access **SSM Parameter Store**.
 
@@ -6,7 +6,7 @@ This project contains source code and supporting files for a **serverless applic
 
 - **sync_function/** - Contains the Python source code for the Lambda function (`sync/app.py`, etc.).
 
-- **template.yaml** - The SAM template that defines the Lambda function, IAM role, and scheduled event (cron job).
+- **template.yaml** - The SAM template that defines the Lambda function, IAM role, and scheduled event (every 5 minutes cron job).
 
 - **.env.example** - A sample environment file containing the necessary environment variables. Copy or rename this to `.env` and replace with your actual values before deploying.
 
