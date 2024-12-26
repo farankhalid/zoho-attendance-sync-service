@@ -1,124 +1,141 @@
-# sync-service
+# AWS Lambda with Scheduled (Cron) Event Using AWS SAM
 
-This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
+This project contains source code and supporting files for a **serverless application** that periodically syncs attendance records from an on-premises (or external) device to **Zoho People**. The application is written in **Python 3.12** and is deployed using the AWS Serverless Application Model (SAM). The key AWS resources in this stack include a **Lambda function** (scheduled every 5 minutes) and an **IAM role** with permissions to access **SSM Parameter Store**.
 
-- sync - Code for the application's Lambda function.
-- events - Invocation events that you can use to invoke the function.
-- tests - Unit tests for the application code. 
-- template.yaml - A template that defines the application's AWS resources.
+## Project Structure
 
-This application reacts to EC2 Instance State change events, demonstrating the power of event-driven development with Amazon EventBridge.
+- **sync_function/** - Contains the Python source code for the Lambda function (`sync/app.py`, etc.).
 
-The application uses several AWS resources, including Lambda functions and an EventBridge Rule trigger. These resources are defined in the `template.yaml` file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.
+- **template.yaml** - The SAM template that defines the Lambda function, IAM role, and scheduled event (cron job).
 
-If you prefer to use an integrated development environment (IDE) to build and test your application, you can use the AWS Toolkit.  
-The AWS Toolkit is an open source plug-in for popular IDEs that uses the SAM CLI to build and deploy serverless applications on AWS. The AWS Toolkit also adds a simplified step-through debugging experience for Lambda function code. See the following links to get started.
+- **.env.example** - A sample environment file containing the necessary environment variables. Copy or rename this to `.env` and replace with your actual values before deploying.
 
-* [CLion](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [GoLand](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [IntelliJ](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [WebStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [Rider](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PhpStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PyCharm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [RubyMine](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [DataGrip](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [VS Code](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
-* [Visual Studio](https://docs.aws.amazon.com/toolkit-for-visual-studio/latest/user-guide/welcome.html)
+- **Makefile** - Simplifies build and deploy operations using the `.env` file.
 
-## Deploy the sample application
+## Deployment Prerequisites
 
-The Serverless Application Model Command Line Interface (SAM CLI) is an extension of the AWS CLI that adds functionality for building and testing Lambda applications. It uses Docker to run your functions in an Amazon Linux environment that matches Lambda.
+Before deploying, ensure you have the following tools installed and configured:
 
-To use the SAM CLI, you need the following tools.
+- **SAM CLI** - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
 
-* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
-* [Python 3 installed](https://www.python.org/downloads/)
-* Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
+- **Docker** - [Install Docker Community Edition](https://hub.docker.com/search/?type=edition&offering=community) for building dependencies in a containerized environment.
 
-To build and deploy your application for the first time, run the following in your shell:
+- **Python 3.12** - If you wish to run and test the code locally.
+
+- **AWS CLI** - [Install AWS CLI](https://aws.amazon.com/cli/) and configure your credentials (`aws configure`).
+
+- **.env** - Copy `.env.example` to `.env` and add your actual parameters (DB_HOST, DB_USER, DB_PASSWORD, etc.).
+
+## Environment Variables
+
+You should have the following variables defined in your `.env` file:
 
 ```bash
-sam build --use-container
-sam deploy --guided
+DB_HOST="<your-database-host>"
+DB_USER="<your-database-username>"
+DB_PASSWORD="<your-database-password>"
+DB_NAME="<your-database-name>"
+ZOHO_CLIENT_ID="<your-zoho-client-id>"
+ZOHO_CLIENT_SECRET="<your-zoho-client-secret>"
+ZOHO_REFRESH_TOKEN="<your-zoho-refresh-token>"
 ```
 
-The first command will build the source of your application. The second command will package and deploy your application to AWS, with a series of prompts:
+These values are passed to the Lambda at deploy time, as shown in the **Makefile**.
 
-* **Stack Name**: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.
-* **AWS Region**: The AWS region you want to deploy your app to.
-* **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
-* **Allow SAM CLI IAM role creation**: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modifies IAM roles, the `CAPABILITY_IAM` value for `capabilities` must be provided. If permission isn't provided through this prompt, to deploy this example you must explicitly pass `--capabilities CAPABILITY_IAM` to the `sam deploy` command.
-* **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
+## Building and Deploying
 
-## Use the SAM CLI to build and test locally
+This project is managed through a **Makefile**, which references your local `.env` to supply parameters to AWS SAM. The typical workflow is:
 
-Build your application with the `sam build --use-container` command.
+1. **Copy the environment file**  
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Fill in the correct values for your environment variables.
+2. **Build and Deploy**
+
+    ```bash
+    make
+    ```
+
+    This runs:
+
+    - ```sam build --beta-features```
+    - ```sam deploy --stack-name SyncService ...```
+
+    using the environment variables from `.env`. By default, it will create or update a CloudFormation stack named SyncService.
+
+## Manual SAM Commands
+
+If you prefer to deploy manually:
+1. **Build the Project**  
+
+   ```bash
+   sam build --beta-features
+   ```
+
+    This will install any dependencies (if needed) and prepare the Lambda code.
+2. **Deploy the Project**
+
+    ```bash
+    sam build
+    ```
+
+    SAM will prompt for a stack name, region, and other parameters. You can also specify your parameters manually using the `--parameter-overrides` flag.
+
+## Local Development and Testing
+1. **Local Build** 
+
+   ```bash
+   sam build --beta-features
+   ```
+
+   Ensures that dependencies are installed and your code is compiled (if needed).
+2. **Local Invoke**
+
+    You can locally test your function by invoking it directly with sam local invoke. For example:
+    
+    ```bash
+    sam local invoke SyncFunction
+    ```
+    
+    If your function needs environment variables in local testing, create a local-env.json or use the `--env-vars` option.
+    
+    > **Note:** Since this function relies on an external database and Zoho People, a full local test may require mocking or stubbing these external calls.
+
+3. **View Logs Locally**
+
+    While the function is running locally, logs will print to your terminal.
+
+## Monitoring & Logs in AWS
+After deployment, you can view logs in AWS CloudWatch:
 
 ```bash
-sync-service$ sam build --use-container
+sam logs -n SyncFunction --stack-name SyncService --tail
 ```
 
-The SAM CLI installs dependencies defined in `sync/requirements.txt`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
-
-Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
-
-Run functions locally and invoke them with the `sam local invoke` command.
-
-```bash
-sync-service$ sam local invoke SyncFunction --event events/event.json
-```
-
-```yaml
-      Events:
-        Sync:
-          Type: CloudWatchEvent # More info about CloudWatchEvent Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#cloudwatchevent
-          Properties:
-            Pattern:
-              source:
-                - aws.ec2
-              detail-type:
-                - EC2 Instance State-change Notification
-```
-
-## Add a resource to your application
-The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
-
-## Fetch, tail, and filter Lambda function logs
-
-To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs` lets you fetch logs generated by your deployed Lambda function from the command line. In addition to printing the logs on the terminal, this command has several nifty features to help you quickly find the bug.
-
-`NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
-
-```bash
-sync-service$ sam logs -n SyncFunction --stack-name "sync-service" --tail
-```
-
-You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
-
-## Tests
-
-Tests are defined in the `tests` folder in this project. Use PIP to install the test dependencies and run tests.
-
-```bash
-sync-service$ pip install -r tests/requirements.txt --user
-# unit test
-sync-service$ python -m pytest tests/unit -v
-# integration test, requiring deploying the stack first.
-# Create the env variable AWS_SAM_STACK_NAME with the name of the stack we are testing
-sync-service$ AWS_SAM_STACK_NAME="sync-service" python -m pytest tests/integration -v
-```
+Replace `SyncService` with your actual CloudFormation stack name if you changed it during deployment.
 
 ## Cleanup
-
-To delete the sample application that you created, use the SAM CLI. Assuming you used your project name for the stack name, you can run the following:
+To remove all AWS resources deployed by this stack, you can use:
 
 ```bash
-sam delete --stack-name "sync-service"
+sam delete --stack-name SyncService
 ```
+    
+Or, if using the Makefile approach:
+
+```bash
+aws cloudformation delete-stack --stack-name SyncService
+```
+
+Make sure to replace `SyncService` with the name of your CloudFormation stack if you chose a different name.
 
 ## Resources
 
-See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
+- [AWS SAM Developer Guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html)
 
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond Sync samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
+- [AWS Lambda Developer Guide](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html)
+
+- [AWS Serverless Application Repository](https://aws.amazon.com/serverless/serverlessrepo/)
