@@ -37,52 +37,52 @@ ssm = boto3.client("ssm")
 def lambda_handler(event, context):
     # logger.info("Received event: %s", json.dumps(event))
     try:
-        logger.info("Calling fetch_attendance_records...")
+        # logger.info("Calling fetch_attendance_records...")
         records = fetch_attendance_records(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME)
-        logger.info("Fetched %d records from database.", len(records))
+        # logger.info("Fetched %d records from database.", len(records))
         
-        if records:
-            logger.info("First few records: %s", json.dumps(records[:5], default=str))
-        else:
-            logger.info("No records retrieved from the database.")
-
-        logger.info("Completed fetch_attendance_records successfully.")
+#         if records:
+#             logger.info("First few records: %s", json.dumps(records[:5], default=str))
+#         else:
+#             logger.info("No records retrieved from the database.")
+# 
+#         logger.info("Completed fetch_attendance_records successfully.")
 
         if not records:
-            logger.info("No records found to send to Zoho.")
+            # logger.info("No records found to send to Zoho.")
             return success_response("No data to send.")
 
-        logger.info("Transforming records for Zoho...")
+        # logger.info("Transforming records for Zoho...")
         zoho_data = transform_records_for_zoho(records)
-        logger.info("Transformed Zoho data. Number of records: %d", len(zoho_data))
-        if zoho_data:
-            logger.info("First few transformed records: %s", json.dumps(zoho_data[:5]))
+        # logger.info("Transformed Zoho data. Number of records: %d", len(zoho_data))
+        # if zoho_data:
+        #     logger.info("First few transformed records: %s", json.dumps(zoho_data[:5]))
 
-        logger.info("Retrieving or refreshing Zoho access token...")
+        # logger.info("Retrieving or refreshing Zoho access token...")
         access_token = get_or_refresh_zoho_access_token(ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET)
-        logger.info("Using access token: %s...", access_token[:10])
+        # logger.info("Using access token: %s...", access_token[:10])
 
-        logger.info("Sending data to Zoho...")
+        # logger.info("Sending data to Zoho...")
         response = send_to_zoho(zoho_data, access_token)
-        logger.info("Zoho API response: %s", response)
+        # logger.info("Zoho API response: %s", response)
         logger.info("Data sent to Zoho successfully.")
 
         return success_response("Data sent to Zoho successfully", response)
 
     except Exception as e:
-        logger.exception("An error occurred while processing.")
+        # logger.exception("An error occurred while processing.")
         return error_response(str(e))
 
 
 def fetch_attendance_records(db_host, db_user, db_password, db_name):
-    logger.info("Calculating time range for attendance records...")
+    # logger.info("Calculating time range for attendance records...")
     end_time = datetime.now(PKT)
     start_time = end_time - timedelta(minutes=15)
 
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    logger.info("Start time (PKT) is: %s", start_time_str)
+    # logger.info("Start time (PKT) is: %s", start_time_str)
     end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
-    logger.info("End time (PKT) is: %s", end_time_str)
+    # logger.info("End time (PKT) is: %s", end_time_str)
 
     query = f"""
     SELECT *
@@ -114,16 +114,16 @@ def fetch_attendance_records(db_host, db_user, db_password, db_name):
         ORDER BY eventTime;
     """
 
-    logger.info("Connecting to DB at host: %s", db_host)
+    # logger.info("Connecting to DB at host: %s", db_host)
     connection = pymysql.connect(
         host=db_host, port=3300, user=db_user, password=db_password, database=db_name
     )
     try:
-        logger.info("Executing query: %s", query)
+        # logger.info("Executing query: %s", query)
         with connection.cursor(pymysql.cursors.DictCursor) as cursor:
             cursor.execute(query)
             records = cursor.fetchall()
-            logger.info("Query executed successfully, fetched %d rows.", len(records))
+            # logger.info("Query executed successfully, fetched %d rows.", len(records))
             return records
     finally:
         connection.close()
@@ -131,7 +131,7 @@ def fetch_attendance_records(db_host, db_user, db_password, db_name):
 
 
 def transform_records_for_zoho(records):
-    logger.info("Starting transformation of records for Zoho...")
+    # logger.info("Starting transformation of records for Zoho...")
     zoho_data = []
     for record in records:
         if record["isCheckin"] == "1":
@@ -143,26 +143,26 @@ def transform_records_for_zoho(records):
 
 
 def get_or_refresh_zoho_access_token(refresh_token, client_id, client_secret):
-    logger.info("Attempting to retrieve cached access token and expiry from SSM.")
+    # logger.info("Attempting to retrieve cached access token and expiry from SSM.")
     try:
         access_token = get_ssm_parameter(ZOHO_TOKEN_SSM_KEY)
         expiry_str = get_ssm_parameter(ZOHO_TOKEN_EXPIRY_SSM_KEY)
         expiry_time = datetime.fromisoformat(expiry_str)
-        logger.info("Cached access token expires at: %s", expiry_time.isoformat())
+        # logger.info("Cached access token expires at: %s", expiry_time.isoformat())
 
         current_time = datetime.now(timezone.utc)
         if current_time < (expiry_time - timedelta(seconds=ACCESS_TOKEN_GRACE_PERIOD)):
             logger.info("Using cached Zoho access token. Valid until %s", expiry_time.isoformat())
             return access_token
         else:
-            logger.info("Cached token near expiry, refreshing now.")
+            # logger.info("Cached token near expiry, refreshing now.")
             return refresh_zoho_access_token(refresh_token, client_id, client_secret)
     except ssm.exceptions.ParameterNotFound:
-        logger.info("No cached Zoho token found. Generating a new one via refresh.")
+        # logger.info("No cached Zoho token found. Generating a new one via refresh.")
         return refresh_zoho_access_token(refresh_token, client_id, client_secret)
     except Exception as e:
-        logger.error("Error retrieving cached token: %s", e)
-        logger.info("Refreshing token due to error.")
+        # logger.error("Error retrieving cached token: %s", e)
+        # logger.info("Refreshing token due to error.")
         return refresh_zoho_access_token(refresh_token, client_id, client_secret)
 
 
@@ -174,13 +174,13 @@ def refresh_zoho_access_token(refresh_token, client_id, client_secret):
         "refresh_token": refresh_token
     }
 
-    logger.info("Refreshing Zoho access token with payload (masking secrets): {"
-                 f"'grant_type': 'refresh_token', 'client_id': '{client_id[:5]}...', "
-                 f"'client_secret': '***', 'refresh_token': '{refresh_token[:5]}...'")
+    # logger.info("Refreshing Zoho access token with payload (masking secrets): {"
+    #              f"'grant_type': 'refresh_token', 'client_id': '{client_id[:5]}...', "
+    #              f"'client_secret': '***', 'refresh_token': '{refresh_token[:5]}...'")
 
     response = requests.post(ZOHO_TOKEN_ENDPOINT, data=payload)
-    logger.info("Zoho token refresh response status: %d", response.status_code)
-    logger.info("Zoho token refresh response body: %s", response.text)
+    # logger.info("Zoho token refresh response status: %d", response.status_code)
+    # logger.info("Zoho token refresh response body: %s", response.text)
 
     if response.status_code != 200:
         raise Exception(f"Failed to refresh Zoho access token: {response.text}")
@@ -189,7 +189,7 @@ def refresh_zoho_access_token(refresh_token, client_id, client_secret):
     access_token = tokens["access_token"]
     expiry_time = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
 
-    logger.info("Storing new access token and expiry in SSM...")
+    # logger.info("Storing new access token and expiry in SSM...")
     put_ssm_parameter(ZOHO_TOKEN_SSM_KEY, access_token, param_type="SecureString")
     put_ssm_parameter(ZOHO_TOKEN_EXPIRY_SSM_KEY, expiry_time.isoformat(), param_type="String")
 
@@ -210,32 +210,32 @@ def send_to_zoho(data, access_token):
         "dateFormat": "yyyy-MM-dd HH:mm:ss"
     }
 
-    logger.info("Sending POST to Zoho bulkImport endpoint with form-data payload: %s", payload)
+    # logger.info("Sending POST to Zoho bulkImport endpoint with form-data payload: %s", payload)
 
     try:
         response = requests.post(ZOHO_BULK_IMPORT_ENDPOINT, headers=headers, data=payload)
 
         logger.info("Zoho bulkImport response status: %d", response.status_code)
-        logger.info("Zoho bulkImport response body: %s", response.text)
+        # logger.info("Zoho bulkImport response body: %s", response.text)
 
         return {
             "status_code": response.status_code,
             "response_body": response.text
         }
     except Exception as e:
-        logger.error("Error while sending data to Zoho: %s", str(e))
+        # logger.error("Error while sending data to Zoho: %s", str(e))
         raise Exception(f"Failed to send data to Zoho: {str(e)}")
 
 
 def get_ssm_parameter(name):
-    logger.info("Retrieving SSM parameter: %s", name)
+    # logger.info("Retrieving SSM parameter: %s", name)
     value = ssm.get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"]
     logger.info("Retrieved SSM parameter: %s = %s", name, value[:10] + "..." if len(value) > 10 else value)
     return value
 
 
 def put_ssm_parameter(name, value, param_type="String"):
-    logger.info("Putting SSM parameter: %s = %s...", name, value[:10] + "..." if len(value) > 10 else value)
+    # logger.info("Putting SSM parameter: %s = %s...", name, value[:10] + "..." if len(value) > 10 else value)
     ssm.put_parameter(Name=name, Value=value, Type=param_type, Overwrite=True)
     logger.info("Successfully updated SSM parameter: %s", name)
 
@@ -244,7 +244,7 @@ def success_response(message, data=None):
     body = {"message": message}
     if data is not None:
         body["data"] = data
-    logger.info("Returning success response: %s", json.dumps(body))
+    # logger.info("Returning success response: %s", json.dumps(body))
     return {
         "statusCode": 200,
         "body": json.dumps(body)
@@ -252,7 +252,7 @@ def success_response(message, data=None):
 
 
 def error_response(message):
-    logger.info("Returning error response: %s", message)
+    # logger.info("Returning error response: %s", message)
     return {
         "statusCode": 500,
         "body": json.dumps({"error": message})
