@@ -1,6 +1,6 @@
 # AWS Lambda Cron-based Attendance Sync to Zoho People
 
-This project contains source code and supporting files for a **serverless application** that periodically syncs attendance records from an on-premises (or external) device to **Zoho People**. The application is written in **Python 3.12** and is deployed using the AWS Serverless Application Model (SAM). The key AWS resources in this stack include a **Lambda function** (scheduled every 5 minutes) and an **IAM role** with permissions to access **SSM Parameter Store**.
+This project contains source code and supporting files for a **serverless application** that periodically syncs attendance records from an on-premises (or external) device to **Zoho People**. The application is written in **Python 3.12** and is deployed using the AWS Serverless Application Model (SAM). The key AWS resources in this stack include a **Lambda function** (scheduled every 10 minutes) and an **IAM role** with permissions to access **SSM Parameter Store**.
 
 ## Project Structure
 

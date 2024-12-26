@@ -96,7 +96,7 @@ Resources:
         ScheduledEvent:
           Type: Schedule
           Properties:
-            Schedule: cron(*/5 * * * ? *)
+            Schedule: cron(*/10 * * * ? *)
       RuntimeManagementConfig:
         UpdateRuntimeOn: Auto
 
