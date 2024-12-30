@@ -77,7 +77,7 @@ def lambda_handler(event, context):
 def fetch_attendance_records(db_host, db_user, db_password, db_name):
     logger.info("Calculating time range for attendance records...")
     end_time = datetime.now(PKT)
-    start_time = end_time - timedelta(minutes=3000)
+    start_time = end_time - timedelta(minutes=20)
 
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     logger.info("Start time (PKT) is: %s", start_time_str)
@@ -123,7 +123,7 @@ def fetch_attendance_records(db_host, db_user, db_password, db_name):
         with connection.cursor(pymysql.cursors.DictCursor) as cursor:
             cursor.execute(query)
             records = cursor.fetchall()
-            logger.info("Query executed successfully, fetched %d.", records)
+            logger.info("Query executed successfully, fetched %s.", records)
             return records
     finally:
         connection.close()
@@ -196,9 +196,6 @@ def refresh_zoho_access_token(refresh_token, client_id, client_secret):
 
 
 def send_to_zoho(data, access_token):
-    """
-    Sends attendance data to Zoho's Bulk Import API using form-data.
-    """
     headers = {
         "Authorization": f"Zoho-oauthtoken {access_token}",
     }
