@@ -77,7 +77,7 @@ def lambda_handler(event, context):
 def fetch_attendance_records(db_host, db_user, db_password, db_name):
     logger.info("Calculating time range for attendance records...")
     end_time = datetime.now(PKT)
-    start_time = end_time - timedelta(minutes=20)
+    start_time = end_time - timedelta(minutes=1500)
 
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     logger.info("Start time (PKT) is: %s", start_time_str)
